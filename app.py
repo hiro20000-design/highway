@@ -55,7 +55,7 @@ with col6:
 選択された路線ラベル = st.selectbox("検索したい「優先ルート」を選択", list(路線オプション.keys()))
 
 # ==========================================
-# 1. 座標取得（町名・番地・施設名対応強化版）
+# 1. 座標取得
 # ==========================================
 @st.cache_data(ttl=86400)
 def get_coords(place_name):
@@ -63,13 +63,11 @@ def get_coords(place_name):
         return None, None
     
     base = place_name.strip()
-    # 検索バリエーションを生成（「豊田市古瀬間」→「豊田市古瀬間町」なども自動試行）
     queries = [base]
     if not base.endswith(("町", "市", "区", "村", "駅", "IC", "JCT")):
         queries.append(base + "町")
         queries.append(base + "駅")
 
-    # 1. 国土地理院API（複数パターン検索）
     for q in queries:
         gsi_url = f"https://msearch.gsi.go.jp/msearch/msearch.jsp?keyword={urllib.parse.quote(q)}"
         try:
@@ -80,8 +78,7 @@ def get_coords(place_name):
         except:
             pass
 
-    # 2. Nominatim API直接呼び出し（固有User-Agent指定でブロック回避）
-    headers = {"User-Agent": "SmartHighwayRouterJapan_PersonalApp/2.1"}
+    headers = {"User-Agent": "SmartHighwayRouterJapan_PersonalApp/3.0"}
     for q in queries:
         nom_url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(q + ', Japan')}&format=json&limit=1"
         try:
@@ -114,16 +111,17 @@ def check_metro(lat, lon):
 
 RAW_DATA_LINES = [
     # 北海道 (hokkaido)
-    "大沼公園,41.9765,140.6625,hokkaido", "八雲,42.2412,140.2512,hokkaido", "長万部,42.5112,140.3612,hokkaido",
-    "伊達,42.4812,140.8612,hokkaido", "室蘭,42.3412,141.0012,hokkaido", "登別東,42.4612,141.1612,hokkaido",
-    "苫小牧西,42.6312,141.4812,hokkaido", "苫小牧東,42.6812,141.7312,hokkaido", "千歳,42.8112,141.6212,hokkaido",
-    "恵庭,42.8812,141.5612,hokkaido", "北広島,42.9612,141.5212,hokkaido", "札幌南,43.0112,141.4612,hokkaido",
-    "札幌,43.0712,141.4112,hokkaido", "小樽,43.1812,141.0112,hokkaido", "江別東,43.0912,141.5812,hokkaido",
-    "岩見沢,43.1812,141.7612,hokkaido", "美唄,43.3312,141.8612,hokkaido", "滝川,43.5612,141.9312,hokkaido",
-    "深川,43.7312,142.0412,hokkaido", "旭川鷹栖,43.8012,142.3412,hokkaido", "旭川北,43.8312,142.4112,hokkaido",
-    "士別剣淵,44.1412,142.3812,hokkaido", "夕張,42.9212,141.9612,hokkaido", "占冠,42.9912,142.4012,hokkaido",
-    "トマム,43.0612,142.6212,hokkaido", "十勝清水,43.0112,142.8812,hokkaido", "音更帯広,42.9712,143.1812,hokkaido",
-    "池田,42.9312,143.4612,hokkaido", "本別,43.1212,143.6012,hokkaido",
+    "函館,41.8112,140.7512,hokkaido", "大沼公園,41.9765,140.6625,hokkaido", "八雲,42.2412,140.2512,hokkaido", 
+    "長万部,42.5112,140.3612,hokkaido", "伊達,42.4812,140.8612,hokkaido", "室蘭,42.3412,141.0012,hokkaido", 
+    "登別東,42.4612,141.1612,hokkaido", "苫小牧西,42.6312,141.4812,hokkaido", "苫小牧東,42.6812,141.7312,hokkaido", 
+    "千歳,42.8112,141.6212,hokkaido", "恵庭,42.8812,141.5612,hokkaido", "北広島,42.9612,141.5212,hokkaido", 
+    "札幌南,43.0112,141.4612,hokkaido", "札幌,43.0712,141.4112,hokkaido", "小樽,43.1812,141.0112,hokkaido", 
+    "江別東,43.0912,141.5812,hokkaido", "岩見沢,43.1812,141.7612,hokkaido", "美唄,43.3312,141.8612,hokkaido", 
+    "滝川,43.5612,141.9312,hokkaido", "深川,43.7312,142.0412,hokkaido", "旭川鷹栖,43.8012,142.3412,hokkaido", 
+    "旭川北,43.8312,142.4112,hokkaido", "士別剣淵,44.1412,142.3812,hokkaido", "夕張,42.9212,141.9612,hokkaido", 
+    "占冠,42.9912,142.4012,hokkaido", "トマム,43.0612,142.6212,hokkaido", "十勝清水,43.0112,142.8812,hokkaido", 
+    "音更帯広,42.9712,143.1812,hokkaido", "池田,42.9312,143.4612,hokkaido", "本別,43.1212,143.6012,hokkaido",
+    "釧路,43.0112,144.3512,hokkaido", "北見,43.8012,143.8912,hokkaido",
     # 東北 (tohoku)
     "白河,37.1145,140.1652,tohoku", "矢吹,37.2012,140.3212,tohoku", "須賀川,37.2812,140.3512,tohoku",
     "郡山南,37.3612,140.3212,tohoku", "郡山,37.4251,140.3125,tohoku", "本宮,37.5112,140.3812,tohoku",
@@ -193,16 +191,17 @@ RAW_DATA_LINES = [
     "加賀,36.2912,136.3012,hokuriku", "福井,36.0712,136.2541,hokuriku", "武生,35.9012,136.1912,hokuriku", "敦賀,35.6512,136.0841,hokuriku",
     "長野,36.5812,138.1812,hokuriku", "須坂長野東,36.6412,138.2612,hokuriku", "信州中野,36.7412,138.3312,hokuriku", "妙高高原,36.8712,138.2112,hokuriku",
     "上田菅平,36.4112,138.2812,hokuriku", "佐久,36.2712,138.4612,hokuriku", "碓氷軽井沢,36.2712,138.6412,hokuriku", "富岡,36.2412,138.8912,hokuriku",
-    # 東名 (tomei)
+    # 東名・東海環状・名神 (tomei)
     "一宮,35.2782,136.8485,tomei", "小牧,35.2934,136.9142,tomei", "春日井,35.2818,137.0142,tomei", "名古屋,35.1583,137.0137,tomei",
-    "豊田,35.0504,137.1352,tomei", "岡崎,34.9142,137.1856,tomei", "音羽蒲郡,34.8612,137.3012,tomei", "豊川,34.8312,137.4012,tomei",
+    "東名三好,35.1112,137.0812,tomei", "豊田,35.0504,137.1352,tomei", "豊田東,35.0381,137.1724,tomei",
+    "豊田松平,35.0612,137.1812,tomei", "豊田勘八,35.1112,137.1912,tomei", "鞍ヶ池,35.0812,137.2112,tomei",
+    "岡崎,34.9142,137.1856,tomei", "音羽蒲郡,34.8612,137.3012,tomei", "豊川,34.8312,137.4012,tomei",
     "浜松,34.7408,137.7709,tomei", "袋井,34.7612,137.9212,tomei", "掛川,34.7612,138.0112,tomei", "吉田,34.7812,138.2412,tomei",
     "静岡,34.9575,138.4060,tomei", "清水,35.0312,138.4812,tomei", "富士,35.1764,138.6475,tomei", "沼津,35.1312,138.8612,tomei",
     "御殿場,35.3022,138.9431,tomei", "大井松田,35.3312,139.1512,tomei", "秦野中井,35.3512,139.2212,tomei",
     "厚木,35.4218,139.3621,tomei", "東京,35.6263,139.6231,tomei",
-    # 新東名・東海環状 (shin_tomei)
-    "豊田東,35.0381,137.1724,shin_tomei", "豊田松平,35.0612,137.1812,shin_tomei", "豊田勘八,35.1112,137.1912,shin_tomei",
-    "鞍ヶ池,35.0812,137.2112,shin_tomei", "岡崎東,34.9312,137.2812,shin_tomei", "新城,34.9171,137.4801,shin_tomei",
+    # 新東名 (shin_tomei)
+    "岡崎東,34.9312,137.2812,shin_tomei", "新城,34.9171,137.4801,shin_tomei",
     "浜松浜北,34.8212,137.7912,shin_tomei", "森掛川,34.8112,137.9512,shin_tomei", "島田金谷,34.8412,138.1212,shin_tomei",
     "新静岡,35.0315,138.3842,shin_tomei", "新清水,35.0712,138.4812,shin_tomei", "新富士,35.1952,138.6751,shin_tomei",
     "新御殿場,35.3188,138.9221,shin_tomei", "伊勢原大山,35.4212,139.2812,shin_tomei",
@@ -237,7 +236,13 @@ RAW_DATA_LINES = [
     "植木,32.9112,130.7112,kansai_west", "熊本,32.7812,130.7741,kansai_west", "御船,32.7212,130.7912,kansai_west", "松橋,32.6412,130.7112,kansai_west",
     "八代,32.4912,130.6212,kansai_west", "人吉,32.2212,130.7512,kansai_west", "えびの,32.0412,130.8212,kansai_west", "宮崎,31.8812,131.3812,kansai_west",
     "溝辺鹿児島空港,31.8112,130.7212,kansai_west", "鹿児島,31.6012,130.5241,kansai_west", "佐賀大和,33.3212,130.2812,kansai_west", "武雄北方,33.2112,130.0512,kansai_west",
-    "大村,32.9212,129.9612,kansai_west", "長崎,32.7412,129.8912,kansai_west", "日田,33.3312,130.9212,kansai_west", "湯布院,33.2512,131.3412,kansai_west", "大分,33.2112,131.5912,kansai_west"
+    "大村,32.9212,129.9612,kansai_west", "長崎,32.7412,129.8912,kansai_west", "日田,33.3312,130.9212,kansai_west", "湯布院,33.2512,131.3412,kansai_west", "大分,33.2112,131.5912,kansai_west",
+    # 追加：関西・中国・四国・九州ハブIC
+    "天理,34.6012,135.8312,kansai_west", "香芝,34.5512,135.6912,kansai_west", "和歌山,34.2412,135.1912,kansai_west",
+    "海南,34.1512,135.2112,kansai_west", "御坊,33.9012,135.1612,kansai_west", "田辺,33.7412,135.3912,kansai_west",
+    "津山,35.0612,134.0012,kansai_west", "新見,34.9812,133.4712,kansai_west", "三次,34.7912,132.8512,kansai_west",
+    "徳島,34.0912,134.5412,kansai_west", "池田,34.0312,133.8112,kansai_west",
+    "延岡,32.5512,131.6512,kansai_west", "日向,32.4112,131.6012,kansai_west"
 ]
 
 all_ics = []
@@ -282,49 +287,44 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
         limit_time_min = int(最大所要時間_時間 * 60)
         route_key = 路線オプション[選択された路線ラベル]
         
+        s_lat, s_lon = get_coords(出発地.strip())
+        e_lat, e_lon = get_coords(目的地.strip())
+        if not s_lat:
+            st.error(f"❌ 出発地「{出発地}」の座標が取得できませんでした。")
+            st.stop()
+        if not e_lat:
+            st.error(f"❌ 目的地「{目的地}」の座標が取得できませんでした。")
+            st.stop()
+
+        direct_dist = haversine(s_lat, s_lon, e_lat, e_lon)
+
         anchor_name = None
-        target_groups = []
+        if route_key == "shin_tomei": anchor_name = "新静岡IC"
+        elif route_key == "tomei": anchor_name = "静岡IC"
+        elif route_key == "chuo": anchor_name = "諏訪IC"
+        elif route_key == "hokuriku": anchor_name = "郡上八幡IC"
+        elif route_key == "kansai": anchor_name = "彦根IC"
 
-        if route_key == "shin_tomei":
-            anchor_name = "新静岡IC"
-            target_groups = ["shin_tomei", "tomei", "kanto"]
-        elif route_key == "tomei":
-            anchor_name = "静岡IC"
-            target_groups = ["tomei", "kanto"]
-        elif route_key == "chuo":
-            anchor_name = "諏訪IC"
-            target_groups = ["chuo", "kanto"]
-        elif route_key == "hokuriku":
-            anchor_name = "郡上八幡IC"
-            target_groups = ["hokuriku"]
-        elif route_key == "kansai":
-            anchor_name = "彦根IC"
-            target_groups = ["kansai_west"]
-        else:
-            target_groups = ["hokkaido", "tohoku", "hokuriku", "tomei", "shin_tomei", "chuo", "kanto", "kansai_west"]
-
-        route_points = [出発地.strip()]
-        if 経由地1.strip(): route_points.append(経由地1.strip())
-        
-        if anchor_name and anchor_name not in route_points and anchor_name != 目的地.strip():
-            alat, _ = get_coords(anchor_name)
-            if alat: route_points.append(anchor_name)
-            
-        if 目的地.strip() not in route_points:
-            route_points.append(目的地.strip())
-
-        r_coords = []
-        for rp in route_points:
-            lat, lon = get_coords(rp)
-            if not lat:
-                st.error(f"❌ 地点「{rp}」の座標が取得できませんでした。表記を変えてお試しください。")
+        route_points = [(s_lat, s_lon)]
+        if 経由地1.strip():
+            v_lat, v_lon = get_coords(経由地1.strip())
+            if not v_lat:
+                st.error(f"❌ 経由地「{経由地1}」の座標が取得できませんでした。")
                 st.stop()
-            r_coords.append((lat, lon))
+            route_points.append((v_lat, v_lon))
+        
+        if anchor_name:
+            a_lat, a_lon = get_coords(anchor_name)
+            if a_lat:
+                detour_dist = haversine(s_lat, s_lon, a_lat, a_lon) + haversine(a_lat, a_lon, e_lat, e_lon)
+                if detour_dist <= direct_dist * 1.6:
+                    route_points.append((a_lat, a_lon))
+                else:
+                    st.info(f"ℹ️ 選択された優先ルート（{選択された路線ラベル}）は目的地と方向が異なるため、最短道なりルートで自動計算しました。")
 
-        start_lat, start_lon = r_coords[0]
-        end_lat, end_lon = r_coords[-1]
+        route_points.append((e_lat, e_lon))
 
-        loc_str = ";".join([f"{c[1]},{c[0]}" for c in r_coords])
+        loc_str = ";".join([f"{c[1]},{c[0]}" for c in route_points])
         osrm_url = f"http://router.project-osrm.org/route/v1/driving/{loc_str}?overview=full&geometries=polyline"
         try:
             osrm_res = requests.get(osrm_url, timeout=12).json()
@@ -340,9 +340,9 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
         for i in range(1, len(route_coords)):
             cum_dists.append(cum_dists[-1] + haversine(route_coords[i-1][0], route_coords[i-1][1], route_coords[i][0], route_coords[i][1]))
 
+        # 地域グループによる制限を完全撤廃し、全国のICをルートと比較
         valid_ics = []
         for ic in all_ics:
-            if ic["group"] not in target_groups: continue
             min_dist = float('inf')
             best_progress = 0
             for i, pt in enumerate(route_coords):
@@ -350,9 +350,8 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 if d < min_dist:
                     min_dist = d
                     best_progress = cum_dists[i]
-            # 出発地・目的地から近いIC（半径15km以内）はルート線から多少離れていても候補に含める
-            dist_from_start = haversine(start_lat, start_lon, ic["lat"], ic["lon"])
-            dist_from_end = haversine(end_lat, end_lon, ic["lat"], ic["lon"])
+            dist_from_start = haversine(s_lat, s_lon, ic["lat"], ic["lon"])
+            dist_from_end = haversine(e_lat, e_lon, ic["lat"], ic["lon"])
             
             if min_dist <= 3.5 or dist_from_start <= 15.0 or dist_from_end <= 15.0:
                 valid_ics.append({
@@ -367,7 +366,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
         valid_ics.sort(key=lambda x: x["progress"])
         filtered_ics = []
         for ic in valid_ics:
-            if not filtered_ics or (ic["progress"] - filtered_ics[-1]["progress"]) > 2.0 or ic["access_start"] <= 15.0 or ic["access_end"] <= 15.0:
+            if not filtered_ics or (ic["progress"] - filtered_ics[-1]["progress"]) > 1.5 or ic["access_start"] <= 15.0 or ic["access_end"] <= 15.0:
                 filtered_ics.append(ic)
 
         candidates = []
@@ -377,13 +376,10 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
             for j in range(i + 1, N):
                 ic1, ic2 = filtered_ics[i], filtered_ics[j]
                 if ic2["progress"] <= ic1["progress"]: continue
-                if (ic1["group"] == "tomei" and ic2["group"] == "shin_tomei") or (ic1["group"] == "shin_tomei" and ic2["group"] == "tomei"):
-                    continue
 
-                hwy_km = ic2["progress"] - ic1["progress"]
-                if hwy_km < 12: continue
+                hwy_km = max(ic2["progress"] - ic1["progress"], haversine(ic1["lat"], ic1["lon"], ic2["lat"], ic2["lon"]) * 1.15)
+                if hwy_km < 10: continue
                 
-                # 出発地→ic1、ic2→目的地の個別アクセス距離を加味
                 local_km = ic1["access_start"] + ic2["access_end"]
                 candidates.append({
                     "name": f"{出発地} ➔ {ic1['name']} ➔ {ic2['name']} ➔ {目的地}",
@@ -398,19 +394,17 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 })
 
         if 多段ワープ and N >= 4:
-            step = 2 if N > 28 else 1
+            step = 2 if N > 25 else 1
             for i in range(0, N - 3, step):
                 for j in range(i + 1, N - 2, step):
                     for k in range(j + 1, N - 1, step):
                         for l in range(k + 1, N, step):
                             ic1, ic2, ic3, ic4 = filtered_ics[i], filtered_ics[j], filtered_ics[k], filtered_ics[l]
-                            groups = {ic1["group"], ic2["group"], ic3["group"], ic4["group"]} - {"kanto"}
-                            if "tomei" in groups and "shin_tomei" in groups: continue
 
-                            h1 = ic2["progress"] - ic1["progress"]
-                            h2 = ic4["progress"] - ic3["progress"]
-                            warp_local = (ic3["progress"] - ic2["progress"]) * 1.15
-                            if h1 < 15 or h2 < 15 or warp_local < 10: continue
+                            h1 = max(ic2["progress"] - ic1["progress"], haversine(ic1["lat"], ic1["lon"], ic2["lat"], ic2["lon"]) * 1.15)
+                            h2 = max(ic4["progress"] - ic3["progress"], haversine(ic3["lat"], ic3["lon"], ic4["lat"], ic4["lon"]) * 1.15)
+                            warp_local = max((ic3["progress"] - ic2["progress"]), haversine(ic2["lat"], ic2["lon"], ic3["lat"], ic3["lon"]) * 1.15)
+                            if h1 < 12 or h2 < 12 or warp_local < 8: continue
 
                             hwy_tot = h1 + h2
                             loc_tot = ic1["access_start"] + warp_local + ic4["access_end"]
