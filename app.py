@@ -135,7 +135,14 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
     if not 出発地.strip() or not 目的地.strip():
         st.error("❌ 出発地と目的地を入力してください。")
         st.stop()
-
+# ▼ ここから追加：検索ボタンが押されたことをGASに送信
+    if GAS_WEBHOOK_URL and GAS_WEBHOOK_URL.startswith("https://"):
+        try:
+            route_info = urllib.parse.quote(f"{出発地} ➔ {目的地}")
+            requests.get(f"{GAS_WEBHOOK_URL}?action=検索実行&route={route_info}", timeout=2)
+        except:
+            pass
+    # ▲ ここまで追加
     with st.spinner(f"🛰️ 【{選択された路線ラベル}】に沿って総当たり計算を開始します..."):
         route_key = 路線オプション[選択された路線ラベル]
         
