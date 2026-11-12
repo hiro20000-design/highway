@@ -1,5 +1,6 @@
 import math
 import urllib.parse
+import re
 import streamlit as st
 import requests
 import polyline
@@ -55,7 +56,7 @@ with col6:
 選択された路線ラベル = st.selectbox("検索したい「優先ルート」を選択", list(路線オプション.keys()))
 
 # ==========================================
-# 1. 座標取得
+# 1. 座標取得（現在地ロスト＆名古屋ワープ対策版）
 # ==========================================
 @st.cache_data(ttl=86400)
 def get_coords(place_name):
@@ -67,6 +68,11 @@ def get_coords(place_name):
     if not base.endswith(("町", "市", "区", "村", "駅", "IC", "JCT")):
         queries.append(base + "町")
         queries.append(base + "駅")
+        
+    # 💡【修正1】「豊田市古瀬間」で失敗した場合、「豊田市」単体でフォールバック検索する安全装置
+    match = re.search(r'(.+?[市区町村])', base)
+    if match:
+        queries.append(match.group(1))
 
     for q in queries:
         gsi_url = f"https://msearch.gsi.go.jp/msearch/msearch.jsp?keyword={urllib.parse.quote(q)}"
@@ -78,7 +84,7 @@ def get_coords(place_name):
         except:
             pass
 
-    headers = {"User-Agent": "SmartHighwayRouterJapan_PersonalApp/3.0"}
+    headers = {"User-Agent": "SmartHighwayRouterJapan_PersonalApp/4.0"}
     for q in queries:
         nom_url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(q + ', Japan')}&format=json&limit=1"
         try:
@@ -108,6 +114,22 @@ def check_metro(lat, lon):
     if 35.00 <= lat <= 35.38 and 136.75 <= lon <= 137.25: return True
     if 34.55 <= lat <= 34.95 and 135.25 <= lon <= 135.85: return True
     return False
+
+# 💡【修正2】高速距離0kmバグを防ぐため、計算済みの「hwy_km」を直接受け取って料金計算する仕様に変更
+def calc_national_toll(ic_start, ic_end, hwy_km, discount=False):
+    if hwy_km <= 1.0: return 0
+    metro_ratio = 0.5 if (ic_start["is_metro"] or ic_end["is_metro"]) else 0.0
+    if ic_start["is_metro"] and ic_end["is_metro"]: metro_ratio = 1.0
+    base_rate = (24.6 * (1.0 - metro_ratio)) + (29.52 * metro_ratio)
+    tc = 150.0
+    if hwy_km <= 100: dist_cost = hwy_km * base_rate
+    elif hwy_km <= 200: dist_cost = (100 * base_rate) + ((hwy_km - 100) * base_rate * 0.75)
+    else: dist_cost = (100 * base_rate) + (100 * base_rate * 0.75) + ((hwy_km - 200) * base_rate * 0.70)
+    fare = (tc + dist_cost) * 1.10
+    if discount:
+        discountable_portion = fare * (1.0 - metro_ratio)
+        fare = (discountable_portion * 0.70) + (fare * metro_ratio)
+    return int(round(fare, -1))
 
 RAW_DATA_LINES = [
     # 北海道 (hokkaido)
@@ -252,22 +274,6 @@ for entry in RAW_DATA_LINES:
         name = parts[0] if parts[0].endswith("IC") else parts[0] + "IC"
         all_ics.append({"name": name, "lat": float(parts[1]), "lon": float(parts[2]), "group": parts[3]})
 
-def calc_national_toll(ic_start, ic_end, discount=False):
-    km = abs(ic_end["progress"] - ic_start["progress"])
-    if km <= 1.0: return 0
-    metro_ratio = 0.5 if (ic_start["is_metro"] or ic_end["is_metro"]) else 0.0
-    if ic_start["is_metro"] and ic_end["is_metro"]: metro_ratio = 1.0
-    base_rate = (24.6 * (1.0 - metro_ratio)) + (29.52 * metro_ratio)
-    tc = 150.0
-    if km <= 100: dist_cost = km * base_rate
-    elif km <= 200: dist_cost = (100 * base_rate) + ((km - 100) * base_rate * 0.75)
-    else: dist_cost = (100 * base_rate) + (100 * base_rate * 0.75) + ((km - 200) * base_rate * 0.70)
-    fare = (tc + dist_cost) * 1.10
-    if discount:
-        discountable_portion = fare * (1.0 - metro_ratio)
-        fare = (discountable_portion * 0.70) + (fare * metro_ratio)
-    return int(round(fare, -1))
-
 # ==========================================
 # 2. 実行ロジック
 # ==========================================
@@ -290,10 +296,10 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
         s_lat, s_lon = get_coords(出発地.strip())
         e_lat, e_lon = get_coords(目的地.strip())
         if not s_lat:
-            st.error(f"❌ 出発地「{出発地}」の座標が取得できませんでした。")
+            st.error(f"❌ 出発地「{出発地}」の座標が取得できませんでした。住所を少し省略して（市や町までに）お試しください。")
             st.stop()
         if not e_lat:
-            st.error(f"❌ 目的地「{目的地}」の座標が取得できませんでした。")
+            st.error(f"❌ 目的地「{目的地}」の座標が取得できませんでした。住所を少し省略して（市や町までに）お試しください。")
             st.stop()
 
         direct_dist = haversine(s_lat, s_lon, e_lat, e_lon)
@@ -330,7 +336,6 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
             osrm_res = requests.get(osrm_url, timeout=12).json()
             if osrm_res.get("code") != "Ok": raise Exception()
             route_geom = osrm_res["routes"][0]["geometry"]
-            total_km = osrm_res["routes"][0]["distance"] / 1000
             route_coords = polyline.decode(route_geom)
         except:
             st.error("❌ ルートデータの取得に失敗しました。時間をおいて再実行してください。")
@@ -340,7 +345,6 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
         for i in range(1, len(route_coords)):
             cum_dists.append(cum_dists[-1] + haversine(route_coords[i-1][0], route_coords[i-1][1], route_coords[i][0], route_coords[i][1]))
 
-        # 地域グループによる制限を完全撤廃し、全国のICをルートと比較
         valid_ics = []
         for ic in all_ics:
             min_dist = float('inf')
@@ -377,6 +381,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 ic1, ic2 = filtered_ics[i], filtered_ics[j]
                 if ic2["progress"] <= ic1["progress"]: continue
 
+                # 💡【修正3】高速距離を安全に確定し、0円バグを防ぐ
                 hwy_km = max(ic2["progress"] - ic1["progress"], haversine(ic1["lat"], ic1["lon"], ic2["lat"], ic2["lon"]) * 1.15)
                 if hwy_km < 10: continue
                 
@@ -385,7 +390,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                     "name": f"{出発地} ➔ {ic1['name']} ➔ {ic2['name']} ➔ {目的地}",
                     "detail": f"高速: 約{int(hwy_km)}km / 下道: 約{int(local_km)}km",
                     "time_min": calc_accurate_time(hwy_km, local_km, num_trips=1),
-                    "toll": calc_national_toll(ic1, ic2, ETC割引),
+                    "toll": calc_national_toll(ic1, ic2, hwy_km, ETC割引),
                     "legs": [
                         {"type": "local", "from": 出発地, "to": ic1['name']},
                         {"type": "hwy", "from": ic1['name'], "to": ic2['name']},
@@ -412,7 +417,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                                 "name": f"【多段】{出発地} ➔ {ic1['name']}~{ic2['name']} ➔ [下道] ➔ {ic3['name']}~{ic4['name']} ➔ {目的地}",
                                 "detail": f"高速計: 約{int(hwy_tot)}km / 中継下道: 約{int(warp_local)}km / 総下道: 約{int(loc_tot)}km",
                                 "time_min": calc_accurate_time(hwy_tot, loc_tot, num_trips=2),
-                                "toll": calc_national_toll(ic1, ic2, ETC割引) + calc_national_toll(ic3, ic4, ETC割引),
+                                "toll": calc_national_toll(ic1, ic2, h1, ETC割引) + calc_national_toll(ic3, ic4, h2, ETC割引),
                                 "legs": [
                                     {"type": "local", "from": 出発地, "to": ic1['name']},
                                     {"type": "hwy", "from": ic1['name'], "to": ic2['name']},
