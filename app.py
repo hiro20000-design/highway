@@ -27,9 +27,9 @@ st.title("🚗 完全全国対応・多段ナビシミュレーター")
 # ==========================================
 col1, col2 = st.columns(2)
 with col1:
-    出発地 = st.text_input("出発地", value="尾張一宮駅")
+    出発地 = st.text_input("出発地", value="")
 with col2:
-    目的地 = st.text_input("目的地", value="富山駅")
+    目的地 = st.text_input("目的地", value="")
 
 経由地1 = st.text_input("経由地1（任意）", value="")
 
@@ -332,20 +332,18 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 hwy_km = ic2["progress"] - ic1["progress"]
                 if hwy_km < 12: continue
                 local_km = max(0, total_km - hwy_km)
-                toll = calc_national_toll(ic1, ic2, ETC割引)
-
-                if toll <= 高速予算上限円:
-                    candidates.append({
-                        "name": f"{出発地} ➔ {ic1['name']} ➔ {ic2['name']} ➔ {目的地}",
-                        "detail": f"高速: 約{int(hwy_km)}km / 下道: 約{int(local_km)}km",
-                        "time_min": calc_accurate_time(hwy_km, local_km, num_trips=1),
-                        "toll": toll,
-                        "legs": [
-                            {"type": "local", "from": 出発地, "to": ic1['name']},
-                            {"type": "hwy", "from": ic1['name'], "to": ic2['name']},
-                            {"type": "local", "from": ic2['name'], "to": 目的地}
-                        ]
-                    })
+                # 通常計算を追加
+                candidates.append({
+                    "name": f"{出発地} ➔ {ic1['name']} ➔ {ic2['name']} ➔ {目的地}",
+                    "detail": f"高速: 約{int(hwy_km)}km / 下道: 約{int(local_km)}km",
+                    "time_min": calc_accurate_time(hwy_km, local_km, num_trips=1),
+                    "toll": calc_national_toll(ic1, ic2, ETC割引),
+                    "legs": [
+                        {"type": "local", "from": 出発地, "to": ic1['name']},
+                        {"type": "hwy", "from": ic1['name'], "to": ic2['name']},
+                        {"type": "local", "from": ic2['name'], "to": 目的地}
+                    ]
+                })
 
         if 多段ワープ and N >= 4:
             step = 2 if N > 25 else 1
@@ -364,45 +362,68 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
 
                             hwy_tot = h1 + h2
                             loc_tot = max(0, total_km - hwy_tot)
-                            toll_tot = calc_national_toll(ic1, ic2, ETC割引) + calc_national_toll(ic3, ic4, ETC割引)
+                            candidates.append({
+                                "name": f"【多段】{出発地} ➔ {ic1['name']}~{ic2['name']} ➔ [下道] ➔ {ic3['name']}~{ic4['name']} ➔ {目的地}",
+                                "detail": f"高速計: 約{int(hwy_tot)}km / 中継下道: 約{int(warp_local)}km / 総下道: 約{int(loc_tot)}km",
+                                "time_min": calc_accurate_time(hwy_tot, loc_tot, num_trips=2),
+                                "toll": calc_national_toll(ic1, ic2, ETC割引) + calc_national_toll(ic3, ic4, ETC割引),
+                                "legs": [
+                                    {"type": "local", "from": 出発地, "to": ic1['name']},
+                                    {"type": "hwy", "from": ic1['name'], "to": ic2['name']},
+                                    {"type": "local", "from": ic2['name'], "to": ic3['name']},
+                                    {"type": "hwy", "from": ic3['name'], "to": ic4['name']},
+                                    {"type": "local", "from": ic4['name'], "to": 目的地}
+                                ]
+                            })
 
-                            if toll_tot <= 高速予算上限円:
-                                candidates.append({
-                                    "name": f"【多段】{出発地} ➔ {ic1['name']}~{ic2['name']} ➔ [下道] ➔ {ic3['name']}~{ic4['name']} ➔ {目的地}",
-                                    "detail": f"高速計: 約{int(hwy_tot)}km / 中継下道: 約{int(warp_local)}km / 総下道: 約{int(loc_tot)}km",
-                                    "time_min": calc_accurate_time(hwy_tot, loc_tot, num_trips=2),
-                                    "toll": toll_tot,
-                                    "legs": [
-                                        {"type": "local", "from": 出発地, "to": ic1['name']},
-                                        {"type": "hwy", "from": ic1['name'], "to": ic2['name']},
-                                        {"type": "local", "from": ic2['name'], "to": ic3['name']},
-                                        {"type": "hwy", "from": ic3['name'], "to": ic4['name']},
-                                        {"type": "local", "from": ic4['name'], "to": 目的地}
-                                    ]
-                                })
-
-        # 時間制限フィルターの適用
+        # 条件フィルター適用
+        filtered = list(candidates)
         if limit_time_min > 0:
-            candidates = [c for c in candidates if c["time_min"] <= limit_time_min]
+            filtered = [c for c in filtered if c["time_min"] <= limit_time_min]
+        if 高速予算上限円 > 0:
+            filtered = [c for c in filtered if c["toll"] <= 高速予算上限円]
 
-        if candidates:
-            best = min(candidates, key=lambda x: x["toll"])
-            st.success(f"✨ 条件に合う最も安いルートが見つかりました！（道なりIC: {len(filtered_ics)}箇所）")
-            
-            h, m = divmod(best["time_min"], 60)
-            time_str = f"{h}時間{m}分" if h > 0 else f"{m}分"
-
-            st.markdown(f"### 💰 最安コスパ: {best['name']}")
-            st.write(f"**詳細**: {best['detail']} ／ ⏱️ **約 {time_str}** ／ 💴 **{best['toll']:,}円**")
-            
-            st.markdown("#### 🗺️ 区間別ナビ起動（タップ順に案内開始）:")
-            for idx, leg in enumerate(best["legs"]):
-                t_label = "【下道】" if leg["type"] == "local" else "【高速】"
-                avoid = "&avoid=tolls" if leg["type"] == "local" else ""
-                url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(leg['from'])}&destination={urllib.parse.quote(leg['to'])}&travelmode=driving{avoid}"
-                st.markdown(f"- 第{idx+1}区間 {t_label}: [{leg['from']} ➔ {leg['to']}]({url})")
+        if not candidates:
+            st.error("ルートが見つかりませんでした。")
         else:
-            if limit_time_min > 0:
-                st.warning(f"⚠️ 指定された予算（{高速予算上限円}円以下）と時間（{最大所要時間_時間}時間以内）の両方に収まるルートが見つかりませんでした。条件を緩和してください。")
+            st.success(f"✨ 探索が完了しました！（道なりIC: {len(filtered_ics)}箇所）")
+            
+            # 結果の選別 (Colabと同じ3ルート表示)
+            selected = []
+            true_fastest = min(candidates, key=lambda x: x["time_min"])
+            f_copy = dict(true_fastest)
+            f_copy["badge"] = "🚀 最速ルート（実走最短・参考）"
+            selected.append(f_copy)
+
+            if filtered:
+                cheapest = min(filtered, key=lambda x: x["toll"])
+                if cheapest["name"] != true_fastest["name"]:
+                    c_copy = dict(cheapest)
+                    c_copy["badge"] = "💰 条件内・最安コスパ"
+                    selected.append(c_copy)
+
+                fastest_in_cond = min(filtered, key=lambda x: x["time_min"])
+                if fastest_in_cond["name"] != true_fastest["name"] and fastest_in_cond["name"] != cheapest["name"]:
+                    fic_copy = dict(fastest_in_cond)
+                    fic_copy["badge"] = "⚖️ 条件内・最速バランス"
+                    selected.append(fic_copy)
             else:
-                st.warning(f"⚠️ 指定された予算（{高速予算上限円}円以下）に収まるルートが見つかりませんでした。予算を上げるか条件を変更してください。")
+                st.warning("⚠️ 指定された予算や時間の条件に収まるルートがありませんでした。参考として上記の最速ルートを提示します。")
+
+            # 結果の描画
+            for r in selected:
+                h, m = divmod(r["time_min"], 60)
+                time_str = f"{h}時間{m}分" if h > 0 else f"{m}分"
+
+                with st.container():
+                    st.markdown(f"### {r['badge']}")
+                    st.markdown(f"**{r['name']}**")
+                    st.write(f"{r['detail']} ／ ⏱️ **約 {time_str}** ／ 💴 **{r['toll']:,}円**")
+                    
+                    st.markdown("#### 区間別ナビ起動（タップ順に案内開始）:")
+                    for idx, leg in enumerate(r["legs"]):
+                        t_label = "【下道】" if leg["type"] == "local" else "【高速】"
+                        avoid = "&avoid=tolls" if leg["type"] == "local" else ""
+                        url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(leg['from'])}&destination={urllib.parse.quote(leg['to'])}&travelmode=driving{avoid}"
+                        st.markdown(f"- 第{idx+1}区間 {t_label}: [{leg['from']} ➔ {leg['to']}]({url})")
+                    st.markdown("---")
