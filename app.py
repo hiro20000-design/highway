@@ -328,7 +328,6 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 if d < min_dist:
                     min_dist = d
                     best_progress = cum_dists[i]
-            # 判定距離を 2.5km から 3.5km に拡大
             if min_dist <= 3.5:
                 valid_ics.append({
                     "name": ic["name"], "lat": ic["lat"], "lon": ic["lon"],
