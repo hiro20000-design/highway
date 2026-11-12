@@ -56,7 +56,7 @@ with col6:
 選択された路線ラベル = st.selectbox("検索したい「優先ルート」を選択", list(路線オプション.keys()))
 
 # ==========================================
-# 1. 座標取得（現在地ロスト＆名古屋ワープ対策版）
+# 1. 座標取得
 # ==========================================
 @st.cache_data(ttl=86400)
 def get_coords(place_name):
@@ -69,7 +69,6 @@ def get_coords(place_name):
         queries.append(base + "町")
         queries.append(base + "駅")
         
-    # 💡【修正1】「豊田市古瀬間」で失敗した場合、「豊田市」単体でフォールバック検索する安全装置
     match = re.search(r'(.+?[市区町村])', base)
     if match:
         queries.append(match.group(1))
@@ -84,7 +83,7 @@ def get_coords(place_name):
         except:
             pass
 
-    headers = {"User-Agent": "SmartHighwayRouterJapan_PersonalApp/4.0"}
+    headers = {"User-Agent": "SmartHighwayRouterJapan_PersonalApp/5.0"}
     for q in queries:
         nom_url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(q + ', Japan')}&format=json&limit=1"
         try:
@@ -115,7 +114,6 @@ def check_metro(lat, lon):
     if 34.55 <= lat <= 34.95 and 135.25 <= lon <= 135.85: return True
     return False
 
-# 💡【修正2】高速距離0kmバグを防ぐため、計算済みの「hwy_km」を直接受け取って料金計算する仕様に変更
 def calc_national_toll(ic_start, ic_end, hwy_km, discount=False):
     if hwy_km <= 1.0: return 0
     metro_ratio = 0.5 if (ic_start["is_metro"] or ic_end["is_metro"]) else 0.0
@@ -296,10 +294,10 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
         s_lat, s_lon = get_coords(出発地.strip())
         e_lat, e_lon = get_coords(目的地.strip())
         if not s_lat:
-            st.error(f"❌ 出発地「{出発地}」の座標が取得できませんでした。住所を少し省略して（市や町までに）お試しください。")
+            st.error(f"❌ 出発地「{出発地}」の座標が取得できませんでした。住所を少し省略してお試しください。")
             st.stop()
         if not e_lat:
-            st.error(f"❌ 目的地「{目的地}」の座標が取得できませんでした。住所を少し省略して（市や町までに）お試しください。")
+            st.error(f"❌ 目的地「{目的地}」の座標が取得できませんでした。住所を少し省略してお試しください。")
             st.stop()
 
         direct_dist = haversine(s_lat, s_lon, e_lat, e_lon)
@@ -381,7 +379,16 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 ic1, ic2 = filtered_ics[i], filtered_ics[j]
                 if ic2["progress"] <= ic1["progress"]: continue
 
-                # 💡【修正3】高速距離を安全に確定し、0円バグを防ぐ
+                d_start_ic1 = haversine(s_lat, s_lon, ic1["lat"], ic1["lon"])
+                d_start_ic2 = haversine(s_lat, s_lon, ic2["lat"], ic2["lon"])
+                d_end_ic1 = haversine(e_lat, e_lon, ic1["lat"], ic1["lon"])
+                d_end_ic2 = haversine(e_lat, e_lon, ic2["lat"], ic2["lon"])
+
+                # 💡【重要】逆走防止ロジック
+                if d_start_ic1 > d_start_ic2 + 3.0: continue
+                if d_end_ic2 > d_end_ic1 + 3.0: continue
+                if d_end_ic2 >= d_end_ic1 - 2.0: continue
+
                 hwy_km = max(ic2["progress"] - ic1["progress"], haversine(ic1["lat"], ic1["lon"], ic2["lat"], ic2["lon"]) * 1.15)
                 if hwy_km < 10: continue
                 
@@ -405,6 +412,19 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                     for k in range(j + 1, N - 1, step):
                         for l in range(k + 1, N, step):
                             ic1, ic2, ic3, ic4 = filtered_ics[i], filtered_ics[j], filtered_ics[k], filtered_ics[l]
+
+                            # 多段ワープ時の逆走防止ロジック
+                            d_start_ic1 = haversine(s_lat, s_lon, ic1["lat"], ic1["lon"])
+                            d_start_ic2 = haversine(s_lat, s_lon, ic2["lat"], ic2["lon"])
+                            if d_start_ic1 > d_start_ic2 + 3.0: continue
+
+                            d_end_ic3 = haversine(e_lat, e_lon, ic3["lat"], ic3["lon"])
+                            d_end_ic4 = haversine(e_lat, e_lon, ic4["lat"], ic4["lon"])
+                            if d_end_ic4 > d_end_ic3 + 3.0: continue
+                            if d_end_ic4 >= d_end_ic3 - 2.0: continue
+
+                            d_goal_ic2 = haversine(e_lat, e_lon, ic2["lat"], ic2["lon"])
+                            if d_end_ic3 > d_goal_ic2 + 5.0: continue
 
                             h1 = max(ic2["progress"] - ic1["progress"], haversine(ic1["lat"], ic1["lon"], ic2["lat"], ic2["lon"]) * 1.15)
                             h2 = max(ic4["progress"] - ic3["progress"], haversine(ic3["lat"], ic3["lon"], ic4["lat"], ic4["lon"]) * 1.15)
