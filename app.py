@@ -37,9 +37,13 @@ col3, col4 = st.columns(2)
 with col3:
     高速予算上限円 = st.number_input("高速予算上限 (円)", value=3000, step=500)
 with col4:
-    ETC割引 = st.checkbox("ETC割引（深夜/休日30%引）を適用", value=True)
+    最大所要時間_時間 = st.number_input("最大所要時間 (時間) ※0で無制限", value=0.0, step=0.5)
 
-多段ワープ = st.checkbox("多段ワープ（1回余分に乗り降りして節約）を探索する", value=True)
+col5, col6 = st.columns(2)
+with col5:
+    ETC割引 = st.checkbox("ETC割引（深夜/休日30%引）を適用", value=True)
+with col6:
+    多段ワープ = st.checkbox("多段ワープ（1回余分に乗り降りして節約）を探索", value=True)
 
 # 優先路線の選択
 路線オプション = {
@@ -58,11 +62,21 @@ with col4:
 @st.cache_data(ttl=3600)
 def get_coords(place_name):
     if not place_name or not place_name.strip(): return None, None
+    # 1. 国土地理院API
     gsi_url = f"https://msearch.gsi.go.jp/msearch/msearch.jsp?keyword={urllib.parse.quote(place_name.strip())}"
     try:
         res = requests.get(gsi_url, timeout=5).json()
         if res: return res[0]["geometry"]["coordinates"][1], res[0]["geometry"]["coordinates"][0]
     except: pass
+    
+    # 2. Geopy(OSM) フォールバック （あいまい検索用）
+    try:
+        from geopy.geocoders import Nominatim
+        geolocator = Nominatim(user_agent="highway_router_app_v1")
+        loc = geolocator.geocode(f"{place_name.strip()}, Japan", timeout=5)
+        if loc: return loc.latitude, loc.longitude
+    except: pass
+    
     return None, None
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -215,7 +229,6 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
         st.error("❌ 出発地と目的地を入力してください。")
         st.stop()
 
-    # ▼ 検索ボタンが押されたことをGASに送信
     if GAS_WEBHOOK_URL and GAS_WEBHOOK_URL.startswith("https://"):
         try:
             route_info = urllib.parse.quote(f"{出発地} ➔ {目的地}")
@@ -224,6 +237,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
             pass
 
     with st.spinner(f"🛰️ 【{選択された路線ラベル}】に沿って総当たり計算を開始します..."):
+        limit_time_min = int(最大所要時間_時間 * 60)
         route_key = 路線オプション[選択された路線ラベル]
         
         anchor_name = None
@@ -245,7 +259,6 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
             anchor_name = "彦根IC"
             target_groups = ["kansai_west"]
         else:
-            # ▼ 修正ポイント：お任せ（auto）の対象グループに hokkaido と tohoku を追加
             target_groups = ["hokkaido", "tohoku", "hokuriku", "tomei", "shin_tomei", "chuo", "kanto", "kansai_west"]
 
         route_points = [出発地.strip()]
@@ -262,7 +275,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
         for rp in route_points:
             lat, lon = get_coords(rp)
             if not lat:
-                st.error(f"❌ 地点「{rp}」の座標が取得できませんでした。")
+                st.error(f"❌ 地点「{rp}」の座標が取得できませんでした。表記を変えてお試しください。")
                 st.stop()
             r_coords.append((lat, lon))
 
@@ -368,9 +381,13 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                                     ]
                                 })
 
+        # 時間制限フィルターの適用
+        if limit_time_min > 0:
+            candidates = [c for c in candidates if c["time_min"] <= limit_time_min]
+
         if candidates:
             best = min(candidates, key=lambda x: x["toll"])
-            st.success(f"✨ 予算内で最も安いルートが見つかりました！（道なりIC: {len(filtered_ics)}箇所）")
+            st.success(f"✨ 条件に合う最も安いルートが見つかりました！（道なりIC: {len(filtered_ics)}箇所）")
             
             h, m = divmod(best["time_min"], 60)
             time_str = f"{h}時間{m}分" if h > 0 else f"{m}分"
@@ -385,4 +402,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(leg['from'])}&destination={urllib.parse.quote(leg['to'])}&travelmode=driving{avoid}"
                 st.markdown(f"- 第{idx+1}区間 {t_label}: [{leg['from']} ➔ {leg['to']}]({url})")
         else:
-            st.warning("⚠️ 指定された予算内に収まるルートが見つかりませんでした。予算を上げるか条件を変更してください。")
+            if limit_time_min > 0:
+                st.warning(f"⚠️ 指定された予算（{高速予算上限円}円以下）と時間（{最大所要時間_時間}時間以内）の両方に収まるルートが見つかりませんでした。条件を緩和してください。")
+            else:
+                st.warning(f"⚠️ 指定された予算（{高速予算上限円}円以下）に収まるルートが見つかりませんでした。予算を上げるか条件を変更してください。")
