@@ -10,7 +10,7 @@ st.set_page_config(page_title="完全全国対応スマート高速ルーター"
 # ==========================================
 # 🔧 訪問者カウンター (GAS連携)
 # ==========================================
-GAS_WEBHOOK_URL = "" # ←ここにGASのURLを貼り付けてください（空欄でも動きます）
+GAS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbz1ngul4BEJ7Xpmx-LfVNrEwe_qcw79v6GYxr514mMh6g-rkmbhLOnmTSEFsNUuNqXQ/exec" # ←ここにGASのURLを貼り付けてください（空欄でも動きます）
 
 if "counted" not in st.session_state:
     st.session_state.counted = True
