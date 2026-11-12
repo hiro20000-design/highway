@@ -1,6 +1,5 @@
 import math
 import urllib.parse
-from datetime import datetime, timedelta
 import streamlit as st
 import requests
 import polyline
@@ -45,7 +44,6 @@ with col5:
 with col6:
     多段ワープ = st.checkbox("多段ワープ（1回余分に乗り降りして節約）を探索", value=True)
 
-# 優先路線の選択
 路線オプション = {
     "🌐 お任せ (最短道なり)": "auto",
     "🚗 新東名経由 (120km/h快走)": "shin_tomei",
@@ -57,30 +55,50 @@ with col6:
 選択された路線ラベル = st.selectbox("検索したい「優先ルート」を選択", list(路線オプション.keys()))
 
 # ==========================================
-# 1. 関数群
+# 1. 座標取得（町名・番地・施設名対応強化版）
 # ==========================================
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=86400)
 def get_coords(place_name):
-    if not place_name or not place_name.strip(): return None, None
-    gsi_url = f"https://msearch.gsi.go.jp/msearch/msearch.jsp?keyword={urllib.parse.quote(place_name.strip())}"
-    try:
-        res = requests.get(gsi_url, timeout=5).json()
-        if res: return res[0]["geometry"]["coordinates"][1], res[0]["geometry"]["coordinates"][0]
-    except: pass
+    if not place_name or not place_name.strip():
+        return None, None
     
-    try:
-        from geopy.geocoders import Nominatim
-        geolocator = Nominatim(user_agent="highway_router_app_v2")
-        loc = geolocator.geocode(f"{place_name.strip()}, Japan", timeout=5)
-        if loc: return loc.latitude, loc.longitude
-    except: pass
-    
+    base = place_name.strip()
+    # 検索バリエーションを生成（「豊田市古瀬間」→「豊田市古瀬間町」なども自動試行）
+    queries = [base]
+    if not base.endswith(("町", "市", "区", "村", "駅", "IC", "JCT")):
+        queries.append(base + "町")
+        queries.append(base + "駅")
+
+    # 1. 国土地理院API（複数パターン検索）
+    for q in queries:
+        gsi_url = f"https://msearch.gsi.go.jp/msearch/msearch.jsp?keyword={urllib.parse.quote(q)}"
+        try:
+            res = requests.get(gsi_url, timeout=5).json()
+            if res and len(res) > 0:
+                coords = res[0]["geometry"]["coordinates"]
+                return float(coords[1]), float(coords[0])
+        except:
+            pass
+
+    # 2. Nominatim API直接呼び出し（固有User-Agent指定でブロック回避）
+    headers = {"User-Agent": "SmartHighwayRouterJapan_PersonalApp/2.1"}
+    for q in queries:
+        nom_url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(q + ', Japan')}&format=json&limit=1"
+        try:
+            res = requests.get(nom_url, headers=headers, timeout=5).json()
+            if res and len(res) > 0:
+                return float(res[0]["lat"]), float(res[0]["lon"])
+        except:
+            pass
+
     return None, None
 
 def haversine(lat1, lon1, lat2, lon2):
-    R = 6371; dLat = math.radians(lat2 - lat1); dLon = math.radians(lon2 - lon1)
+    R = 6371.0
+    dLat = math.radians(lat2 - lat1)
+    dLon = math.radians(lon2 - lon1)
     a = math.sin(dLat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLon/2)**2
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 def calc_accurate_time(hwy_km, local_km, num_trips=1):
     t_local = (local_km / 34.0) * 60
@@ -128,7 +146,7 @@ RAW_DATA_LINES = [
     "気仙沼中央,38.8912,141.5512,tohoku", "宮古中央,39.6312,141.9312,tohoku", "八戸,40.4812,141.4512,tohoku",
     "郡山東,37.4112,140.4312,tohoku", "磐梯熱海,37.4712,140.2612,tohoku", "猪苗代磐梯高原,37.5412,140.1112,tohoku",
     "会津若松,37.5212,139.9212,tohoku",
-    # 関東・甲信越 (kanto) - 常磐道・北関東道・圏央道・東北道・関越道 完全網羅
+    # 関東・甲信越 (kanto)
     "三郷,35.8412,139.8612,kanto", "流山,35.8712,139.9112,kanto", "柏,35.8912,139.9512,kanto",
     "谷和原,35.9812,140.0212,kanto", "桜土浦,36.0612,140.1512,kanto", "土浦北,36.1112,140.1812,kanto",
     "千代田石岡,36.1712,140.2512,kanto", "岩間,36.2812,140.3012,kanto", "水戸,36.3712,140.3912,kanto",
@@ -182,8 +200,9 @@ RAW_DATA_LINES = [
     "静岡,34.9575,138.4060,tomei", "清水,35.0312,138.4812,tomei", "富士,35.1764,138.6475,tomei", "沼津,35.1312,138.8612,tomei",
     "御殿場,35.3022,138.9431,tomei", "大井松田,35.3312,139.1512,tomei", "秦野中井,35.3512,139.2212,tomei",
     "厚木,35.4218,139.3621,tomei", "東京,35.6263,139.6231,tomei",
-    # 新東名 (shin_tomei)
-    "豊田東,35.0381,137.1724,shin_tomei", "岡崎東,34.9312,137.2812,shin_tomei", "新城,34.9171,137.4801,shin_tomei",
+    # 新東名・東海環状 (shin_tomei)
+    "豊田東,35.0381,137.1724,shin_tomei", "豊田松平,35.0612,137.1812,shin_tomei", "豊田勘八,35.1112,137.1912,shin_tomei",
+    "鞍ヶ池,35.0812,137.2112,shin_tomei", "岡崎東,34.9312,137.2812,shin_tomei", "新城,34.9171,137.4801,shin_tomei",
     "浜松浜北,34.8212,137.7912,shin_tomei", "森掛川,34.8112,137.9512,shin_tomei", "島田金谷,34.8412,138.1212,shin_tomei",
     "新静岡,35.0315,138.3842,shin_tomei", "新清水,35.0712,138.4812,shin_tomei", "新富士,35.1952,138.6751,shin_tomei",
     "新御殿場,35.3188,138.9221,shin_tomei", "伊勢原大山,35.4212,139.2812,shin_tomei",
@@ -302,6 +321,9 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 st.stop()
             r_coords.append((lat, lon))
 
+        start_lat, start_lon = r_coords[0]
+        end_lat, end_lon = r_coords[-1]
+
         loc_str = ";".join([f"{c[1]},{c[0]}" for c in r_coords])
         osrm_url = f"http://router.project-osrm.org/route/v1/driving/{loc_str}?overview=full&geometries=polyline"
         try:
@@ -328,18 +350,24 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 if d < min_dist:
                     min_dist = d
                     best_progress = cum_dists[i]
-            if min_dist <= 3.5:
+            # 出発地・目的地から近いIC（半径15km以内）はルート線から多少離れていても候補に含める
+            dist_from_start = haversine(start_lat, start_lon, ic["lat"], ic["lon"])
+            dist_from_end = haversine(end_lat, end_lon, ic["lat"], ic["lon"])
+            
+            if min_dist <= 3.5 or dist_from_start <= 15.0 or dist_from_end <= 15.0:
                 valid_ics.append({
                     "name": ic["name"], "lat": ic["lat"], "lon": ic["lon"],
                     "progress": best_progress,
                     "is_metro": 1 if check_metro(ic["lat"], ic["lon"]) else 0,
-                    "group": ic["group"]
+                    "group": ic["group"],
+                    "access_start": dist_from_start * 1.25,
+                    "access_end": dist_from_end * 1.25
                 })
 
         valid_ics.sort(key=lambda x: x["progress"])
         filtered_ics = []
         for ic in valid_ics:
-            if not filtered_ics or (ic["progress"] - filtered_ics[-1]["progress"]) > 3.0:
+            if not filtered_ics or (ic["progress"] - filtered_ics[-1]["progress"]) > 2.0 or ic["access_start"] <= 15.0 or ic["access_end"] <= 15.0:
                 filtered_ics.append(ic)
 
         candidates = []
@@ -354,7 +382,9 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
 
                 hwy_km = ic2["progress"] - ic1["progress"]
                 if hwy_km < 12: continue
-                local_km = max(0, total_km - hwy_km)
+                
+                # 出発地→ic1、ic2→目的地の個別アクセス距離を加味
+                local_km = ic1["access_start"] + ic2["access_end"]
                 candidates.append({
                     "name": f"{出発地} ➔ {ic1['name']} ➔ {ic2['name']} ➔ {目的地}",
                     "detail": f"高速: 約{int(hwy_km)}km / 下道: 約{int(local_km)}km",
@@ -368,7 +398,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 })
 
         if 多段ワープ and N >= 4:
-            step = 2 if N > 25 else 1
+            step = 2 if N > 28 else 1
             for i in range(0, N - 3, step):
                 for j in range(i + 1, N - 2, step):
                     for k in range(j + 1, N - 1, step):
@@ -379,11 +409,11 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
 
                             h1 = ic2["progress"] - ic1["progress"]
                             h2 = ic4["progress"] - ic3["progress"]
-                            warp_local = ic3["progress"] - ic2["progress"]
+                            warp_local = (ic3["progress"] - ic2["progress"]) * 1.15
                             if h1 < 15 or h2 < 15 or warp_local < 10: continue
 
                             hwy_tot = h1 + h2
-                            loc_tot = max(0, total_km - hwy_tot)
+                            loc_tot = ic1["access_start"] + warp_local + ic4["access_end"]
                             candidates.append({
                                 "name": f"【多段】{出発地} ➔ {ic1['name']}~{ic2['name']} ➔ [下道] ➔ {ic3['name']}~{ic4['name']} ➔ {目的地}",
                                 "detail": f"高速計: 約{int(hwy_tot)}km / 中継下道: 約{int(warp_local)}km / 総下道: 約{int(loc_tot)}km",
@@ -398,7 +428,6 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                                 ]
                             })
 
-        # 条件フィルター適用
         filtered = list(candidates)
         if limit_time_min > 0:
             filtered = [c for c in filtered if c["time_min"] <= limit_time_min]
