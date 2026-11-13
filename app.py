@@ -83,7 +83,7 @@ def get_coords(place_name):
         except:
             pass
 
-    headers = {"User-Agent": "SmartHighwayRouterJapan_PersonalApp/7.0"}
+    headers = {"User-Agent": "SmartHighwayRouterJapan_PersonalApp/8.0"}
     for q in queries:
         nom_url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(q + ', Japan')}&format=json&limit=1"
         try:
@@ -131,6 +131,9 @@ def calc_national_toll(ic_start, ic_end, hwy_km, discount=False):
         fare = (discountable_portion * 0.70) + (fare * metro_ratio)
     return int(round(fare, -1))
 
+# ==========================================
+# 🗺️ 全国IC網データベース（抜け漏れ完全対策版）
+# ==========================================
 RAW_DATA_LINES = [
     # 北海道 (hokkaido)
     "函館,41.8112,140.7512,hokkaido", "大沼公園,41.9765,140.6625,hokkaido", "八雲,42.2412,140.2512,hokkaido", 
@@ -165,8 +168,8 @@ RAW_DATA_LINES = [
     "亘理,38.0312,140.8612,tohoku", "仙台港北,38.2812,140.9812,tohoku", "石巻河南,38.4412,141.2612,tohoku",
     "気仙沼中央,38.8912,141.5512,tohoku", "宮古中央,39.6312,141.9312,tohoku", "八戸,40.4812,141.4512,tohoku",
     "郡山東,37.4112,140.4312,tohoku", "磐梯熱海,37.4712,140.2612,tohoku", "猪苗代磐梯高原,37.5412,140.1112,tohoku",
-    "会津若松,37.5212,139.9212,tohoku",
-    # 関東・甲信越 (kanto) 徹底補強
+    "会津若松,37.5212,139.9212,tohoku", "会津坂下,37.5612,139.8212,tohoku", "西会津,37.5912,139.6512,tohoku",
+    # 関東・甲信越 (kanto)
     "三郷,35.8412,139.8612,kanto", "流山,35.8712,139.9112,kanto", "柏,35.8912,139.9512,kanto",
     "谷和原,35.9812,140.0212,kanto", "桜土浦,36.0612,140.1512,kanto", "土浦北,36.1112,140.1812,kanto",
     "千代田石岡,36.1712,140.2512,kanto", "岩間,36.2812,140.3012,kanto", "水戸,36.3712,140.3912,kanto",
@@ -198,7 +201,7 @@ RAW_DATA_LINES = [
     "高崎,36.3212,139.0512,kanto", "前橋,36.3812,139.0412,kanto", "渋川伊香保,36.4812,139.0112,kanto",
     "沼田,36.6412,139.0612,kanto", "水上,36.7512,138.9712,kanto", "湯沢,36.9312,138.8112,kanto",
     "六日町,37.0612,138.8712,kanto", "小出,37.2312,138.9412,kanto", "越後川口,37.2712,138.8612,kanto",
-    "長岡,37.4412,138.8041,hokuriku", "三条燕,37.6512,138.9112,hokuriku", "新潟西,37.8612,139.0041,hokuriku",
+    "長岡,37.4412,138.8041,kanto", "三条燕,37.6512,138.9112,kanto", "新潟西,37.8612,139.0041,kanto",
     "横浜町田,35.5112,139.4712,kanto", "海老名,35.4312,139.3812,kanto", "木更津金田,35.4212,139.9212,kanto",
     "大泉,35.7512,139.6012,kanto", "和光,35.7812,139.6212,kanto", "美女木,35.8212,139.6312,kanto", "川口,35.8412,139.7312,kanto",
     "市川,35.7112,139.9212,kanto", "船橋,35.7012,139.9712,kanto", "幕張,35.6512,140.0512,kanto", "千葉,35.6012,140.1212,kanto",
@@ -215,7 +218,7 @@ RAW_DATA_LINES = [
     "加賀,36.2912,136.3012,hokuriku", "福井,36.0712,136.2541,hokuriku", "武生,35.9012,136.1912,hokuriku", "敦賀,35.6512,136.0841,hokuriku",
     "長野,36.5812,138.1812,hokuriku", "須坂長野東,36.6412,138.2612,hokuriku", "信州中野,36.7412,138.3312,hokuriku", "妙高高原,36.8712,138.2112,hokuriku",
     "上田菅平,36.4112,138.2812,hokuriku", "佐久,36.2712,138.4612,hokuriku", "碓氷軽井沢,36.2712,138.6412,hokuriku", "富岡,36.2412,138.8912,hokuriku",
-    # 東名・伊勢湾岸道・名二環 (tomei) 徹底補強
+    # 東名・伊勢湾岸道・名二環 (tomei)
     "一宮,35.2782,136.8485,tomei", "小牧,35.2934,136.9142,tomei", "春日井,35.2818,137.0142,tomei", "名古屋,35.1583,137.0137,tomei",
     "東名三好,35.1112,137.0812,tomei", "豊田,35.0504,137.1352,tomei", "豊田東,35.0381,137.1724,tomei",
     "豊田松平,35.0612,137.1812,tomei", "豊田勘八,35.1112,137.1912,tomei", "鞍ヶ池,35.0812,137.2112,tomei",
@@ -234,13 +237,14 @@ RAW_DATA_LINES = [
     "浜松浜北,34.8212,137.7912,shin_tomei", "森掛川,34.8112,137.9512,shin_tomei", "島田金谷,34.8412,138.1212,shin_tomei",
     "新静岡,35.0315,138.3842,shin_tomei", "新清水,35.0712,138.4812,shin_tomei", "新富士,35.1952,138.6751,shin_tomei",
     "新御殿場,35.3188,138.9221,shin_tomei", "伊勢原大山,35.4212,139.2812,shin_tomei",
-    # 中央道 (chuo)
+    # 中央道・長野道 (chuo) 徹底補強
     "多治見,35.3402,137.1147,chuo", "土岐,35.3612,137.1812,chuo", "瑞浪,35.3712,137.2512,chuo", "恵那,35.4412,137.4012,chuo",
     "中津川,35.4925,137.4727,chuo", "園原,35.4612,137.6512,chuo", "飯田山本,35.4812,137.7612,chuo", "飯田,35.4988,137.7946,chuo",
-    "松川,35.6012,137.9012,chuo", "駒ヶ根,35.7312,137.9212,chuo", "伊那,35.8612,137.9412,chuo", "諏訪,35.9989,138.1136,chuo",
-    "諏訪南,35.9212,138.2312,chuo", "小淵沢,35.8612,138.3112,chuo", "韮崎,35.7212,138.4312,chuo", "甲府昭和,35.6329,138.5442,chuo",
-    "一宮御坂,35.6312,138.6812,chuo", "大月,35.6112,138.9312,chuo", "上野原,35.6212,139.1112,chuo", "相模湖,35.6112,139.1912,chuo",
-    "八王子,35.6798,139.3364,chuo", "国立府中,35.6712,139.4412,chuo", "調布,35.6512,139.5512,chuo", "松本,36.2212,137.9312,chuo", "安曇野,36.3112,137.9112,chuo",
+    "松川,35.6012,137.9012,chuo", "駒ヶ根,35.7312,137.9212,chuo", "伊那,35.8612,137.9412,chuo", "伊北,35.9961,137.9732,chuo",
+    "岡谷,36.0592,138.0461,chuo", "塩尻,36.1152,137.9541,chuo", "諏訪,35.9989,138.1136,chuo", "諏訪南,35.9212,138.2312,chuo", 
+    "小淵沢,35.8612,138.3112,chuo", "韮崎,35.7212,138.4312,chuo", "甲府昭和,35.6329,138.5442,chuo", "一宮御坂,35.6312,138.6812,chuo", 
+    "大月,35.6112,138.9312,chuo", "上野原,35.6212,139.1112,chuo", "相模湖,35.6112,139.1912,chuo", "八王子,35.6798,139.3364,chuo", 
+    "国立府中,35.6712,139.4412,chuo", "調布,35.6512,139.5512,chuo", "松本,36.2212,137.9312,chuo", "安曇野,36.3112,137.9112,chuo",
     # 関西・中国・四国・九州 (kansai_west) 徹底補強
     "大垣,35.3218,136.6214,kansai_west", "関ヶ原,35.3582,136.4612,kansai_west", "米原,35.3241,136.2914,kansai_west", "彦根,35.2612,136.2641,kansai_west",
     "八日市,35.0912,136.2212,kansai_west", "竜王,35.0512,136.1112,kansai_west", "栗東,35.0112,135.9912,kansai_west", "京都東,34.9912,135.8212,kansai_west",
@@ -274,6 +278,7 @@ RAW_DATA_LINES = [
     "門真,34.7312,135.5912,kansai_west", "東大阪,34.6712,135.6012,kansai_west", "松原,34.5812,135.5512,kansai_west",
     "堺,34.5312,135.5112,kansai_west", "岸和田和泉,34.4512,135.4312,kansai_west", "泉佐野,34.4012,135.3412,kansai_west",
     "阪南,34.3312,135.2612,kansai_west", "大山崎,34.9012,135.6912,kansai_west", "久御山,34.8812,135.7412,kansai_west",
+    "宇治西,34.9012,135.7812,kansai_west", "大山崎,34.9012,135.6912,kansai_west",
     "中津,33.5812,131.2112,kansai_west", "宇佐,33.5212,131.3312,kansai_west", "別府,33.3012,131.4712,kansai_west",
     "佐伯,32.9312,131.8812,kansai_west", "西都,32.1012,131.4112,kansai_west", "清武,31.8512,131.3812,kansai_west",
     "嬉野,33.1012,129.9812,kansai_west", "東そのぎ,33.0412,129.9512,kansai_west"
@@ -360,7 +365,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
 
         candidates = []
         
-        # 💡【機能追加】「全線下道（0円）」のルートを基本候補として確実に追加
+        # 【全線下道（0円）】ルートを基本候補として追加
         candidates.append({
             "name": f"【全線下道】{出発地} ➔ {目的地}",
             "detail": f"高速: 0km / 下道: 約{int(total_km)}km",
@@ -372,6 +377,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
         })
 
         valid_ics = []
+        # グループ縛りなし。全国すべてのICを対象に近接判定を行う
         for ic in all_ics:
             min_dist = float('inf')
             best_progress = 0
@@ -388,7 +394,6 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                     "name": ic["name"], "lat": ic["lat"], "lon": ic["lon"],
                     "progress": best_progress,
                     "is_metro": 1 if check_metro(ic["lat"], ic["lon"]) else 0,
-                    "group": ic["group"],
                     "access_start": dist_from_start * 1.25,
                     "access_end": dist_from_end * 1.25
                 })
@@ -406,14 +411,14 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 ic1, ic2 = filtered_ics[i], filtered_ics[j]
                 if ic2["progress"] <= ic1["progress"]: continue
 
+                # 逆走・行き過ぎ防止フィルター
                 d_start_ic1 = haversine(s_lat, s_lon, ic1["lat"], ic1["lon"])
                 d_start_ic2 = haversine(s_lat, s_lon, ic2["lat"], ic2["lon"])
                 d_end_ic1 = haversine(e_lat, e_lon, ic1["lat"], ic1["lon"])
                 d_end_ic2 = haversine(e_lat, e_lon, ic2["lat"], ic2["lon"])
 
-                if d_start_ic1 > d_start_ic2 + 3.0: continue
-                if d_end_ic2 > d_end_ic1 + 3.0: continue
-                if d_end_ic2 >= d_end_ic1 - 2.0: continue
+                if d_start_ic1 > d_start_ic2 + 5.0: continue
+                if d_end_ic2 > d_end_ic1 + 5.0: continue
 
                 hwy_km = max(ic2["progress"] - ic1["progress"], haversine(ic1["lat"], ic1["lon"], ic2["lat"], ic2["lon"]) * 1.15)
                 if hwy_km < 10: continue
@@ -445,12 +450,11 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
 
                             d_start_ic1 = haversine(s_lat, s_lon, ic1["lat"], ic1["lon"])
                             d_start_ic2 = haversine(s_lat, s_lon, ic2["lat"], ic2["lon"])
-                            if d_start_ic1 > d_start_ic2 + 3.0: continue
+                            if d_start_ic1 > d_start_ic2 + 5.0: continue
 
                             d_end_ic3 = haversine(e_lat, e_lon, ic3["lat"], ic3["lon"])
                             d_end_ic4 = haversine(e_lat, e_lon, ic4["lat"], ic4["lon"])
-                            if d_end_ic4 > d_end_ic3 + 3.0: continue
-                            if d_end_ic4 >= d_end_ic3 - 2.0: continue
+                            if d_end_ic4 > d_end_ic3 + 5.0: continue
 
                             d_goal_ic2 = haversine(e_lat, e_lon, ic2["lat"], ic2["lon"])
                             if d_end_ic3 > d_goal_ic2 + 5.0: continue
@@ -487,7 +491,6 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
         if 高速予算上限円 > 0:
             filtered = [c for c in filtered if c["toll"] <= 高速予算上限円]
 
-        # 💡【新ロジック】高速を使ったルートが予算内で一つも残らなかった場合のアラート
         has_highway_route = any(c["toll"] > 0 for c in filtered)
 
         if not filtered:
@@ -500,21 +503,18 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
 
             selected = []
             
-            # 最速ルート（予算を無視した実走最短の参考値）
             true_fastest = min(candidates, key=lambda x: x["time_min"])
             if true_fastest["toll"] > 0:
                 f_copy = dict(true_fastest)
                 f_copy["badge"] = "🚀 最速ルート（実走最短・参考）"
                 selected.append(f_copy)
 
-            # 予算内での最安コスパ（ここで全線下道が選ばれることが多い）
             cheapest = min(filtered, key=lambda x: x["toll"])
             if cheapest["name"] != true_fastest["name"] or true_fastest["toll"] == 0:
                 c_copy = dict(cheapest)
                 c_copy["badge"] = "💰 条件内・最安コスパ"
                 selected.append(c_copy)
 
-            # 予算内での最速バランス（下道以外で予算内に収まる最速ルート）
             highway_filtered = [c for c in filtered if c["toll"] > 0]
             if highway_filtered:
                 fastest_in_cond = min(highway_filtered, key=lambda x: x["time_min"])
