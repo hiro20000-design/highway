@@ -83,7 +83,7 @@ def get_coords(place_name):
         except:
             pass
 
-    headers = {"User-Agent": "SmartHighwayRouterJapan_PersonalApp/5.0"}
+    headers = {"User-Agent": "SmartHighwayRouterJapan_PersonalApp/6.0"}
     for q in queries:
         nom_url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(q + ', Japan')}&format=json&limit=1"
         try:
@@ -211,7 +211,7 @@ RAW_DATA_LINES = [
     "加賀,36.2912,136.3012,hokuriku", "福井,36.0712,136.2541,hokuriku", "武生,35.9012,136.1912,hokuriku", "敦賀,35.6512,136.0841,hokuriku",
     "長野,36.5812,138.1812,hokuriku", "須坂長野東,36.6412,138.2612,hokuriku", "信州中野,36.7412,138.3312,hokuriku", "妙高高原,36.8712,138.2112,hokuriku",
     "上田菅平,36.4112,138.2812,hokuriku", "佐久,36.2712,138.4612,hokuriku", "碓氷軽井沢,36.2712,138.6412,hokuriku", "富岡,36.2412,138.8912,hokuriku",
-    # 東名・東海環状・名神 (tomei)
+    # 東名・東海環状・名神・伊勢湾岸道・名二環 (tomei)
     "一宮,35.2782,136.8485,tomei", "小牧,35.2934,136.9142,tomei", "春日井,35.2818,137.0142,tomei", "名古屋,35.1583,137.0137,tomei",
     "東名三好,35.1112,137.0812,tomei", "豊田,35.0504,137.1352,tomei", "豊田東,35.0381,137.1724,tomei",
     "豊田松平,35.0612,137.1812,tomei", "豊田勘八,35.1112,137.1912,tomei", "鞍ヶ池,35.0812,137.2112,tomei",
@@ -220,6 +220,9 @@ RAW_DATA_LINES = [
     "静岡,34.9575,138.4060,tomei", "清水,35.0312,138.4812,tomei", "富士,35.1764,138.6475,tomei", "沼津,35.1312,138.8612,tomei",
     "御殿場,35.3022,138.9431,tomei", "大井松田,35.3312,139.1512,tomei", "秦野中井,35.3512,139.2212,tomei",
     "厚木,35.4218,139.3621,tomei", "東京,35.6263,139.6231,tomei",
+    "名港中央,35.0505,136.8504,tomei", "大高,35.0614,136.9416,tomei", "名古屋南,35.0583,136.9248,tomei", 
+    "飛島,35.0345,136.8123,tomei", "湾岸桑名,35.0358,136.6859,tomei", "東海,35.0369,136.9011,tomei",
+    "清洲東,35.2158,136.8454,tomei", "楠,35.2285,136.9142,tomei", "名古屋西,35.1554,136.8142,tomei",
     # 新東名 (shin_tomei)
     "岡崎東,34.9312,137.2812,shin_tomei", "新城,34.9171,137.4801,shin_tomei",
     "浜松浜北,34.8212,137.7912,shin_tomei", "森掛川,34.8112,137.9512,shin_tomei", "島田金谷,34.8412,138.1212,shin_tomei",
@@ -379,20 +382,17 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                 ic1, ic2 = filtered_ics[i], filtered_ics[j]
                 if ic2["progress"] <= ic1["progress"]: continue
 
-                d_start_ic1 = haversine(s_lat, s_lon, ic1["lat"], ic1["lon"])
-                d_start_ic2 = haversine(s_lat, s_lon, ic2["lat"], ic2["lon"])
-                d_end_ic1 = haversine(e_lat, e_lon, ic1["lat"], ic1["lon"])
-                d_end_ic2 = haversine(e_lat, e_lon, ic2["lat"], ic2["lon"])
-
-                # 💡【重要】逆走防止ロジック
-                if d_start_ic1 > d_start_ic2 + 3.0: continue
-                if d_end_ic2 > d_end_ic1 + 3.0: continue
-                if d_end_ic2 >= d_end_ic1 - 2.0: continue
-
                 hwy_km = max(ic2["progress"] - ic1["progress"], haversine(ic1["lat"], ic1["lon"], ic2["lat"], ic2["lon"]) * 1.15)
                 if hwy_km < 10: continue
                 
                 local_km = ic1["access_start"] + ic2["access_end"]
+                
+                # 💡【重要修正】迂回率（Detour Ratio）の絶対制限フィルターを追加
+                # 下道と高速を合わせた「実際の総移動距離」が、出発地～目的地の「直線距離」に対して極端に大きすぎる（大回りすぎる）場合は無効とする
+                total_travel_dist = local_km + hwy_km
+                if total_travel_dist > direct_dist * 1.7 + 15.0:
+                    continue
+
                 candidates.append({
                     "name": f"{出発地} ➔ {ic1['name']} ➔ {ic2['name']} ➔ {目的地}",
                     "detail": f"高速: 約{int(hwy_km)}km / 下道: 約{int(local_km)}km",
@@ -413,26 +413,19 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                         for l in range(k + 1, N, step):
                             ic1, ic2, ic3, ic4 = filtered_ics[i], filtered_ics[j], filtered_ics[k], filtered_ics[l]
 
-                            # 多段ワープ時の逆走防止ロジック
-                            d_start_ic1 = haversine(s_lat, s_lon, ic1["lat"], ic1["lon"])
-                            d_start_ic2 = haversine(s_lat, s_lon, ic2["lat"], ic2["lon"])
-                            if d_start_ic1 > d_start_ic2 + 3.0: continue
-
-                            d_end_ic3 = haversine(e_lat, e_lon, ic3["lat"], ic3["lon"])
-                            d_end_ic4 = haversine(e_lat, e_lon, ic4["lat"], ic4["lon"])
-                            if d_end_ic4 > d_end_ic3 + 3.0: continue
-                            if d_end_ic4 >= d_end_ic3 - 2.0: continue
-
-                            d_goal_ic2 = haversine(e_lat, e_lon, ic2["lat"], ic2["lon"])
-                            if d_end_ic3 > d_goal_ic2 + 5.0: continue
-
                             h1 = max(ic2["progress"] - ic1["progress"], haversine(ic1["lat"], ic1["lon"], ic2["lat"], ic2["lon"]) * 1.15)
                             h2 = max(ic4["progress"] - ic3["progress"], haversine(ic3["lat"], ic3["lon"], ic4["lat"], ic4["lon"]) * 1.15)
                             warp_local = max((ic3["progress"] - ic2["progress"]), haversine(ic2["lat"], ic2["lon"], ic3["lat"], ic3["lon"]) * 1.15)
                             if h1 < 12 or h2 < 12 or warp_local < 8: continue
 
-                            hwy_tot = h1 + h2
                             loc_tot = ic1["access_start"] + warp_local + ic4["access_end"]
+                            hwy_tot = h1 + h2
+                            
+                            # 多段ワープ時も迂回率を厳格にチェック
+                            total_travel_dist = loc_tot + hwy_tot
+                            if total_travel_dist > direct_dist * 1.7 + 15.0:
+                                continue
+
                             candidates.append({
                                 "name": f"【多段】{出発地} ➔ {ic1['name']}~{ic2['name']} ➔ [下道] ➔ {ic3['name']}~{ic4['name']} ➔ {目的地}",
                                 "detail": f"高速計: 約{int(hwy_tot)}km / 中継下道: 約{int(warp_local)}km / 総下道: 約{int(loc_tot)}km",
@@ -454,7 +447,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
             filtered = [c for c in filtered if c["toll"] <= 高速予算上限円]
 
         if not candidates:
-            st.error("ルートが見つかりませんでした。")
+            st.warning("⚠️ 指定された予算や時間の条件に収まるルートがありませんでした。予算を上げるか、時間を増やしてお試しください。")
         else:
             st.success(f"✨ 探索が完了しました！（道なりIC: {len(filtered_ics)}箇所）")
             
@@ -477,7 +470,7 @@ if st.button("🚀 最適ルートを計算する", type="primary"):
                     fic_copy["badge"] = "⚖️ 条件内・最速バランス"
                     selected.append(fic_copy)
             else:
-                st.warning("⚠️ 指定された予算や時間の条件に収まるルートがありませんでした。参考として上記の最速ルートを提示します。")
+                st.warning("⚠️ 指定された予算に収まるルートは見つかりませんでしたが、参考として上記の最速ルートを提示します。")
 
             for r in selected:
                 h, m = divmod(r["time_min"], 60)
